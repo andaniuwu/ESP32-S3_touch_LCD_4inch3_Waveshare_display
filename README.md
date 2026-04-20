@@ -6,7 +6,7 @@ The UI includes a loading screen, a main dashboard, and a settings screen, all w
 
 ## Preview
 
-![EV Charger UI preview](squareline/assets/ev1.png)
+![EV Charger UI on real hardware](squareline/test/waveshare_preview.jpg)
 
 ## Hardware
 
