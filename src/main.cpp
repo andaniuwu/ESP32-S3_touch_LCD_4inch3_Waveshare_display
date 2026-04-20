@@ -58,7 +58,7 @@
 #define LVGL_TASK_MIN_DELAY_MS  (1)
 #define LVGL_TASK_STACK_SIZE    (4 * 1024)
 #define LVGL_TASK_PRIORITY      (2)
-#define LVGL_BUF_LINES          (40)
+#define LVGL_BUF_LINES          (60)
 #define LVGL_BUF_SIZE           (ESP_PANEL_LCD_H_RES * LVGL_BUF_LINES)
 
 ESP_Panel *panel = NULL;
