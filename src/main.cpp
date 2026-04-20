@@ -58,13 +58,14 @@
 #define LVGL_TASK_MIN_DELAY_MS  (1)
 #define LVGL_TASK_STACK_SIZE    (4 * 1024)
 #define LVGL_TASK_PRIORITY      (2)
-#define LVGL_BUF_SIZE           (ESP_PANEL_LCD_H_RES * 20)
+#define LVGL_BUF_LINES          (40)
+#define LVGL_BUF_SIZE           (ESP_PANEL_LCD_H_RES * LVGL_BUF_LINES)
 
 ESP_Panel *panel = NULL;
 SemaphoreHandle_t lvgl_mux = NULL;                  // LVGL mutex
 
 #if ESP_PANEL_LCD_BUS_TYPE == ESP_PANEL_BUS_TYPE_RGB
-/* Display flushing */
+/* For RGB with partial LVGL buffers, waiting frame-done per chunk causes visible scan updates. */
 void lvgl_port_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p)
 {
     panel->getLcd()->drawBitmap(area->x1, area->y1, area->x2 + 1, area->y2 + 1, color_p);
@@ -74,6 +75,7 @@ void lvgl_port_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t
 /* Display flushing */
 void lvgl_port_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p)
 {
+    (void)disp;
     panel->getLcd()->drawBitmap(area->x1, area->y1, area->x2 + 1, area->y2 + 1, color_p);
 }
 
@@ -174,9 +176,18 @@ void setup()
     static lv_disp_draw_buf_t draw_buf;
     /* Using double buffers is more faster than single buffer */
     /* Using internal SRAM is more fast than PSRAM (Note: Memory allocated using `malloc` may be located in PSRAM.) */
-    uint8_t *buf = (uint8_t *)heap_caps_calloc(1, LVGL_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL);
-    assert(buf);
-    lv_disp_draw_buf_init(&draw_buf, buf, NULL, LVGL_BUF_SIZE);
+    lv_color_t *buf1 = (lv_color_t *)heap_caps_calloc(1, LVGL_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    assert(buf1);
+
+    // Prefer dual buffering to reduce tearing/jitter during animated screen transitions.
+    lv_color_t *buf2 = (lv_color_t *)heap_caps_calloc(1, LVGL_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    if (buf2) {
+        lv_disp_draw_buf_init(&draw_buf, buf1, buf2, LVGL_BUF_SIZE);
+        Serial.printf("LVGL draw buffer: dual (%d lines)\n", LVGL_BUF_LINES);
+    } else {
+        lv_disp_draw_buf_init(&draw_buf, buf1, NULL, LVGL_BUF_SIZE);
+        Serial.printf("LVGL draw buffer: single (%d lines)\n", LVGL_BUF_LINES);
+    }
 
     /* Initialize the display device */
     static lv_disp_drv_t disp_drv;
@@ -203,8 +214,7 @@ void setup()
     panel->begin();
 
 #if ESP_PANEL_LCD_BUS_TYPE != ESP_PANEL_BUS_TYPE_RGB
-    /* Register a function to notify LVGL when the panel is ready to flush */
-    /* This is useful for refreshing the screen using DMA transfers */
+    /* Register a function to notify LVGL when the panel is ready to flush. */
     panel->getLcd()->setCallback(notify_lvgl_flush_ready, &disp_drv);
 #endif
 
