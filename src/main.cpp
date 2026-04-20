@@ -1,31 +1,16 @@
 #include <Arduino.h>
 
 /**
- * The example demonstrates how to port LVGL.
+ * EV Charger UI — Waveshare ESP32-S3-Touch-LCD-4.3
  *
- * ## How to Use
+ * Main entry point. Initialises the CH422G IO expander, RGB display panel,
+ * GT911 touch controller, and LVGL rendering pipeline, then launches the
+ * SquareLine Studio UI on an RTOS task.
  *
- * To use this example, please firstly install `ESP32_Display_Panel` (including its dependent libraries) and
- * `lvgl` (v8.3.x) libraries, then follow the steps to configure them:
- *
- * 1. [Configure ESP32_Display_Panel](https://github.com/esp-arduino-libs/ESP32_Display_Panel#configure-esp32_display_panel)
- * 2. [Configure LVGL](https://github.com/esp-arduino-libs/ESP32_Display_Panel#configure-lvgl)
- * 3. [Configure Board](https://github.com/esp-arduino-libs/ESP32_Display_Panel#configure-board)
- *
- * ## Example Output
- *
- * ```bash
- * ...
- * Hello LVGL! V8.3.8
- * I am ESP32_Display_Panel
- * Starting LVGL task
- * Setup done
- * Loop
- * Loop
- * Loop
- * Loop
- * ...
- * ```
+ * Display : 800x480 ST7262 RGB parallel
+ * Touch   : GT911 I2C (SDA=8, SCL=9), reset via IO expander
+ * Buffers : dual 60-line internal SRAM for smoother animated transitions
+ * Flush   : immediate lv_disp_flush_ready() for RGB bus (no frame-sync wait)
  */
 
 #include <lvgl.h>
@@ -65,14 +50,16 @@ ESP_Panel *panel = NULL;
 SemaphoreHandle_t lvgl_mux = NULL;                  // LVGL mutex
 
 #if ESP_PANEL_LCD_BUS_TYPE == ESP_PANEL_BUS_TYPE_RGB
-/* For RGB with partial LVGL buffers, waiting frame-done per chunk causes visible scan updates. */
+/* RGB bus: signal flush_ready immediately after drawBitmap.
+ * Waiting for the frame-done callback per chunk causes a visible top-to-bottom
+ * scan effect on this panel. */
 void lvgl_port_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p)
 {
     panel->getLcd()->drawBitmap(area->x1, area->y1, area->x2 + 1, area->y2 + 1, color_p);
     lv_disp_flush_ready(disp);
 }
 #else
-/* Display flushing */
+/* Non-RGB bus: flush_ready is signalled asynchronously by the panel callback. */
 void lvgl_port_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p)
 {
     (void)disp;
@@ -144,11 +131,8 @@ void setup()
 {
     Serial.begin(115200); /* prepare for possible serial debug */
 
-    String LVGL_Arduino = "Hello LVGL! ";
-    LVGL_Arduino += String('V') + lv_version_major() + "." + lv_version_minor() + "." + lv_version_patch();
-
-    Serial.println(LVGL_Arduino);
-    Serial.println("I am ESP32_Display_Panel");
+    Serial.printf("LVGL v%d.%d.%d — EV Charger UI\n",
+                   lv_version_major(), lv_version_minor(), lv_version_patch());
 
     Serial.println("Initialize IO expander");
     ESP_IOExpander *expander = new ESP_IOExpander_CH422G(I2C_MASTER_NUM, ESP_IO_EXPANDER_I2C_CH422G_ADDRESS_000);
@@ -179,7 +163,7 @@ void setup()
     lv_color_t *buf1 = (lv_color_t *)heap_caps_calloc(1, LVGL_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     assert(buf1);
 
-    // Prefer dual buffering to reduce tearing/jitter during animated screen transitions.
+    // Dual buffering reduces tearing during animated screen transitions.
     lv_color_t *buf2 = (lv_color_t *)heap_caps_calloc(1, LVGL_BUF_SIZE * sizeof(lv_color_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (buf2) {
         lv_disp_draw_buf_init(&draw_buf, buf1, buf2, LVGL_BUF_SIZE);
