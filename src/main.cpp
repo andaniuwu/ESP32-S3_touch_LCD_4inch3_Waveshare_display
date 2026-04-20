@@ -11,6 +11,11 @@
  * Touch   : GT911 I2C (SDA=8, SCL=9), reset via IO expander
  * Buffers : dual 60-line internal SRAM for smoother animated transitions
  * Flush   : immediate lv_disp_flush_ready() for RGB bus (no frame-sync wait)
+ *
+ * Libraries:
+ *   https://github.com/esp-arduino-libs/ESP32_Display_Panel
+ *   https://github.com/esp-arduino-libs/ESP32_IO_Expander
+ *   https://github.com/lvgl/lvgl
  */
 
 #include <lvgl.h>
