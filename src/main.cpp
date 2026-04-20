@@ -148,7 +148,24 @@ void setup()
     Serial.println(LVGL_Arduino);
     Serial.println("I am ESP32_Display_Panel");
 
+    Serial.println("Initialize IO expander");
+    ESP_IOExpander *expander = new ESP_IOExpander_CH422G(I2C_MASTER_NUM, ESP_IO_EXPANDER_I2C_CH422G_ADDRESS_000);
+    expander->init();
+    expander->begin();
+    expander->multiPinMode(TP_RST | LCD_BL | LCD_RST | SD_CS | USB_SEL, OUTPUT);
+    expander->digitalWrite(LCD_BL, HIGH);
+    expander->digitalWrite(LCD_RST, HIGH);
+    expander->digitalWrite(SD_CS, HIGH);
+    expander->digitalWrite(USB_SEL, LOW);
+
+    // Pulse the touch reset line before the GT911 bus/device are initialized.
+    expander->digitalWrite(TP_RST, LOW);
+    delay(20);
+    expander->digitalWrite(TP_RST, HIGH);
+    delay(120);
+
     panel = new ESP_Panel();
+    panel->addIOExpander(expander);
 
     /* Initialize LVGL core */
     lv_init();
@@ -181,34 +198,15 @@ void setup()
 #endif
     /* Initialize bus and device of panel */
     panel->init();
+
+    /* Start panel */
+    panel->begin();
+
 #if ESP_PANEL_LCD_BUS_TYPE != ESP_PANEL_BUS_TYPE_RGB
     /* Register a function to notify LVGL when the panel is ready to flush */
     /* This is useful for refreshing the screen using DMA transfers */
     panel->getLcd()->setCallback(notify_lvgl_flush_ready, &disp_drv);
 #endif
-
-    /**
-     * These development boards require the use of an IO expander to configure the screen,
-     * so it needs to be initialized in advance and registered with the panel for use.
-     *
-     */
-    Serial.println("Initialize IO expander");
-    /* Initialize IO expander */
-    // ESP_IOExpander *expander = new ESP_IOExpander_CH422G(I2C_MASTER_NUM, ESP_IO_EXPANDER_I2C_CH422G_ADDRESS_000, I2C_MASTER_SCL_IO, I2C_MASTER_SDA_IO);
-    ESP_IOExpander *expander = new ESP_IOExpander_CH422G(I2C_MASTER_NUM, ESP_IO_EXPANDER_I2C_CH422G_ADDRESS_000);
-    expander->init();
-    expander->begin();
-    expander->multiPinMode(TP_RST | LCD_BL | LCD_RST | SD_CS | USB_SEL, OUTPUT);
-    expander->multiDigitalWrite(TP_RST | LCD_BL | LCD_RST | SD_CS, HIGH);
-
-    // Turn off backlight
-    // expander->digitalWrite(USB_SEL, LOW);
-    expander->digitalWrite(USB_SEL, LOW);
-    /* Add into panel */
-    panel->addIOExpander(expander);
-
-    /* Start panel */
-    panel->begin();
 
     /* Create a task to run the LVGL task periodically */
     lvgl_mux = xSemaphoreCreateRecursiveMutex();
