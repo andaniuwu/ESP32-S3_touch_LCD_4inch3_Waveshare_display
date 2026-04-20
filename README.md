@@ -4,6 +4,10 @@ Firmware for the Waveshare ESP32-S3-Touch-LCD-4.3 board running a multi-screen E
 
 The UI includes a loading screen, a main dashboard, and a settings screen, all with animated transitions and GT911 capacitive touch input.
 
+## Preview
+
+![EV Charger UI preview](squareline/assets/ev1.png)
+
 ## Hardware
 
 - **Board**: Waveshare ESP32-S3-Touch-LCD-4.3
